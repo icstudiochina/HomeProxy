@@ -7,7 +7,7 @@
 
 'use strict';
 
-import { readfile, writefile } from 'fs';
+import { readfile, writefile, popen } from 'fs';
 import { isnan } from 'math';
 import { connect } from 'ubus';
 import { cursor } from 'uci';
@@ -20,6 +20,20 @@ import {
 const ubus = connect();
 
 /* const features = ubus.call('luci.homeproxy', 'singbox_get_features') || {}; */
+
+let is_sb_1_13_plus = false;
+const fd = popen('/usr/bin/sing-box version');
+if (fd) {
+	for (let line = fd.read('line'); length(line); line = fd.read('line')) {
+		let m = match(trim(line), /^sing-box version ([0-9]+)\.([0-9]+)/);
+		if (m) {
+			if (int(m[1]) > 1 || (int(m[1]) === 1 && int(m[2]) >= 13))
+				is_sb_1_13_plus = true;
+			break;
+		}
+	}
+	fd.close();
+}
 
 /* UCI config start */
 const uci = cursor();
@@ -232,8 +246,8 @@ function generate_outbound(node) {
 		password: node.password,
 
 		/* Direct */
-		override_address: node.override_address,
-		override_port: strToInt(node.override_port),
+		override_address: !is_sb_1_13_plus ? node.override_address : null,
+		override_port: !is_sb_1_13_plus ? strToInt(node.override_port) : null,
 		proxy_protocol: strToInt(node.proxy_protocol),
 		/* AnyTLS */
 		idle_session_check_interval: strToTime(node.anytls_idle_session_check_interval),
@@ -592,6 +606,14 @@ if (!isEmpty(main_node)) {
 /* Inbound start */
 config.inbounds = [];
 
+let sniff_opts = {};
+if (!is_sb_1_13_plus) {
+	sniff_opts = {
+		sniff: true,
+		sniff_override_destination: strToBool(sniff_override)
+	};
+}
+
 push(config.inbounds, {
 	type: 'direct',
 	tag: 'dns-in',
@@ -605,9 +627,8 @@ push(config.inbounds, {
 	listen: '::',
 	listen_port: int(mixed_port),
 	udp_timeout: strToTime(udp_timeout),
-	sniff: true,
-	sniff_override_destination: strToBool(sniff_override),
-	set_system_proxy: false
+	set_system_proxy: false,
+	...sniff_opts
 });
 
 if (match(proxy_mode, /redirect/))
@@ -617,8 +638,7 @@ if (match(proxy_mode, /redirect/))
 
 		listen: '::',
 		listen_port: int(redirect_port),
-		sniff: true,
-		sniff_override_destination: strToBool(sniff_override)
+		...sniff_opts
 	});
 if (match(proxy_mode, /tproxy/))
 	push(config.inbounds, {
@@ -629,8 +649,7 @@ if (match(proxy_mode, /tproxy/))
 		listen_port: int(tproxy_port),
 		network: 'udp',
 		udp_timeout: strToTime(udp_timeout),
-		sniff: true,
-		sniff_override_destination: strToBool(sniff_override)
+		...sniff_opts
 	});
 if (match(proxy_mode, /tun/))
 	push(config.inbounds, {
@@ -644,8 +663,7 @@ if (match(proxy_mode, /tun/))
 		endpoint_independent_nat: strToBool(endpoint_independent_nat),
 		udp_timeout: strToTime(udp_timeout),
 		stack: tcpip_stack,
-		sniff: true,
-		sniff_override_destination: strToBool(sniff_override)
+		...sniff_opts
 	});
 /* Inbound end */
 
@@ -795,17 +813,18 @@ config.route = {
 			inbound: 'dns-in',
 			action: 'hijack-dns'
 		}
-		/*
-		 * leave for sing-box 1.13.0
-		 * {
-		 * 	action: 'sniff'
-		 * }
-		 */
 	],
 	rule_set: [],
 	auto_detect_interface: isEmpty(default_interface) ? true : null,
 	default_interface: default_interface
 };
+
+if (is_sb_1_13_plus && strToBool(sniff_override)) {
+	push(config.route.rules, {
+		action: 'sniff',
+		timeout: '1s'
+	});
+}
 
 /* Routing rules */
 if (!isEmpty(main_node)) {
