@@ -320,9 +320,9 @@ function generate_outbound(node) {
 				config: node.tls_ech_config,
 				config_path: node.tls_ech_config_path
 			} : null,
-			utls: !isEmpty(node.tls_utls) ? {
+			utls: (!isEmpty(node.tls_utls) || node.tls_reality === '1') ? {
 				enabled: true,
-				fingerprint: node.tls_utls
+				fingerprint: !isEmpty(node.tls_utls) ? node.tls_utls : 'chrome'
 			} : null,
 			reality: (node.tls_reality === '1') ? {
 				enabled: true,
