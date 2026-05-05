@@ -8,6 +8,7 @@
 'use strict';
 
 import { access, error, lstat, popen, readfile, writefile } from 'fs';
+import { cursor } from 'uci';
 
 /* Kanged from ucode/luci */
 function shellquote(s) {
@@ -136,8 +137,12 @@ const methods = {
 				return { result: false, error: 'illegal site' };
 				break;
 			}
+			const uci = cursor();
+			uci.load('homeproxy');
+			const mixed_port = uci.get('homeproxy', 'config', 'mixed_port') || '5330';
+			const proxy_env = `http_proxy="http://127.0.0.1:${mixed_port}" https_proxy="http://127.0.0.1:${mixed_port}"`;
 
-			return { result: (system(`/usr/bin/wget --spider -qT3 ${url} 2>"/dev/null"`, 3100) === 0) };
+			return { result: (system(`env ${proxy_env} /usr/bin/wget --spider -qT5 ${url} 2>"/dev/null"`, 5100) === 0) };
 		}
 	},
 

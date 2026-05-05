@@ -27,7 +27,12 @@ check_list_update() {
 	local listname="$4"
 	local lock="$RUN_DIR/update_resources-$listtype.lock"
 	local github_token="$(uci -q get homeproxy.config.github_token)"
+	local via_proxy="$(uci -q get homeproxy.subscription.update_via_proxy)"
+	local mixed_port="$(uci -q get homeproxy.config.mixed_port || echo 5330)"
 	local wget="wget --timeout=10 -q"
+	if [ "$via_proxy" = "1" ]; then
+		wget="env http_proxy=http://127.0.0.1:$mixed_port https_proxy=http://127.0.0.1:$mixed_port $wget"
+	fi
 
 	exec 200>"$lock"
 	if ! flock -n 200 &> "/dev/null"; then
