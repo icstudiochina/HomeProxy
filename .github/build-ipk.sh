@@ -138,10 +138,11 @@ else
 default_postinst $0 $@' > "$TEMP_PKG_DIR/CONTROL/postinst"
 	chmod 0755 "$TEMP_PKG_DIR/CONTROL/postinst"
 
-	echo -e "[ -n "\${IPKG_INSTROOT}" ] || {
+	echo -e "[ -n \"\${IPKG_INSTROOT}\" ] || {
 	(. /etc/uci-defaults/$PKG_NAME) && rm -f /etc/uci-defaults/$PKG_NAME
 	rm -f /tmp/luci-indexcache
 	rm -rf /tmp/luci-modulecache/
+	killall -HUP rpcd 2>/dev/null
 	exit 0
 }" > "$TEMP_PKG_DIR/CONTROL/postinst-pkg"
 	chmod 0755 "$TEMP_PKG_DIR/CONTROL/postinst-pkg"
